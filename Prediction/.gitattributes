@@ -1,0 +1,4 @@
+bottom_middle_params.pkl filter=lfs diff=lfs merge=lfs -text
+bottom_outside_params.pkl filter=lfs diff=lfs merge=lfs -text
+top_params.pkl filter=lfs diff=lfs merge=lfs -text
+top_params_overfit.pkl filter=lfs diff=lfs merge=lfs -text
