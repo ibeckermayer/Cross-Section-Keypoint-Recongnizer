@@ -1,0 +1,11 @@
+*.pyc
+*.jpg
+*.jpeg
+*.bmp
+*.pkl
+*.pickle
+*.txt
+*.mat
+!WorkFlow.jpg
+*.uxf
+
