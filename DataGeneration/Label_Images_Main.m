@@ -1,9 +1,9 @@
 % Click left top, middle top, right top, middle bottom, left bottom, right
 % bottom
 
-while direc_not_empty('PreProcessedImages/') == 1; %!!!
-    load('trainingData.mat'); %!!!
-    files = dir('PreProcessedImages/*.jpg'); %!!!
+while direc_not_empty('PreProcessedImages/') == 1; 
+    load('trainingData.mat'); 
+    files = dir('PreProcessedImages/*.jpg'); 
     
     if ~isnumeric(trainingData{end,1}) % Sample #1 for the first entry
         sample_number = 1;
@@ -11,7 +11,7 @@ while direc_not_empty('PreProcessedImages/') == 1; %!!!
         sample_number = trainingData{end,1}+1; % Otherwise make it the next available integer
     end
     
-    f = ['PreProcessedImages/' files(1).name]; % get filename !!!
+    f = ['PreProcessedImages/' files(1).name]; % get filename 
     
     pts = readPoints(f,6); % mark the points
     

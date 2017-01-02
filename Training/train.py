@@ -5,7 +5,7 @@ from collections import OrderedDict
 
 import cv2
 import matplotlib
-#!!!matplotlib.use('Agg')
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 from pandas.io.parsers import read_csv
@@ -89,7 +89,8 @@ def fit_specialists(pretrain=False):
         cols = setting['columns']
         flip_indices = setting['flip_indices']
         name = setting['name']
-        X,y = load2d(cols=cols,flip_inds=flip_indices)
+        dummy_columns = setting['dummy_columns']
+        X,y = load2d(cols=cols,flip_inds=flip_indices,dummy_cols=dummy_columns )
         
         # Create the model
         model = build_model()
@@ -342,13 +343,13 @@ def build_model():
 # Pretrain determines whether the model should load certain pre-trained parameters before to training.
 SPECIALIST_SETTINGS = [
 
-    dict(
-        columns = ('left_top_x', 'left_top_y', 'middle_top_x', 'middle_top_y', 'right_top_x', 'right_top_y'),
-        dummy_columns = (None),
-        flip_indices = ((0,4),(1,5)),
-        name = 'top',
-        pretrain = False
-    ),
+                       #dict(
+                       #columns = ('left_top_x', 'left_top_y', 'middle_top_x', 'middle_top_y', 'right_top_x', 'right_top_y'),
+                       #dummy_columns = (None),
+                       #flip_indices = ((0,4),(1,5)),
+                       #name = 'top',
+                       #pretrain = False
+                       #),
 
     dict(
         columns = ('middle_bottom_x', 'middle_bottom_y'),
@@ -368,7 +369,7 @@ SPECIALIST_SETTINGS = [
 ]
 
 
-#!!!fit_specialists()
+#fit_specialists()
 # Get all changes onto GitHub
 
 
