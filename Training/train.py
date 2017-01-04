@@ -343,13 +343,13 @@ def build_model():
 # Pretrain determines whether the model should load certain pre-trained parameters before to training.
 SPECIALIST_SETTINGS = [
 
-                       #dict(
-                       #columns = ('left_top_x', 'left_top_y', 'middle_top_x', 'middle_top_y', 'right_top_x', 'right_top_y'),
-                       #dummy_columns = (None),
-                       #flip_indices = ((0,4),(1,5)),
-                       #name = 'top',
-                       #pretrain = False
-                       #),
+    dict(
+         columns = ('left_top_x', 'left_top_y', 'middle_top_x', 'middle_top_y', 'right_top_x', 'right_top_y'),
+         dummy_columns = (None),
+         flip_indices = ((0,4),(1,5)),
+         name = 'top',
+         pretrain = False
+         ),
 
     dict(
         columns = ('middle_bottom_x', 'middle_bottom_y'),

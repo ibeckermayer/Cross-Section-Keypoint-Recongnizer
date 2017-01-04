@@ -107,17 +107,104 @@ def load_model():
 
     return specialists
 
-# input image name and models, get out the model's prediction
-def predict(models,image_name,plot=True): #!!!
+# Auto label the image for width, height, and depth
+# Input the list of models (from load_model()), image name (string) , units (string), and units per pixel (float) and get a labeled image as the output
+# lab_bottom determines whether it will label the bottom of the weld (some welds don't go all the way through)
+def label(models,image_name,units="pixels",units_per_pixel=1,lab_bottom=True,show=True):
+    
+    # find the predicted points according to the model
+    x, y = predict(models,image_name,plot=False)
+    
+    # find the equation of the line connecting top left and top right
+    m_width, b_width = line_between_2_pts((x[0],y[0]),(x[2],y[2]))
+
+    # find the equation of the line perpendicular to the line connecting top left and top right
+    # and passing through top middle
+    m_height, b_height = perp_line(m_width,(x[1],y[1]))
+    
+    # find the intersection of the width line and the height line
+    inter = intersection(m_width,b_width,m_height,b_height)
+
+    # find the width (pixel distance between top left and top right * units_per_pixel)
+    width = dist((x[0],y[0]),(x[2],y[2])) * units_per_pixel
+
+    # find the height (pixel distance between top middle and inter * units_per_pixel)
+    height = dist(inter,(x[1],y[1])) * units_per_pixel
+
+    #!!! plot this
+
+    if lab_bottom:
+        # find equation of the line connecting bottom left and bottom right
+        m_bot, b_bot = line_between_2_pts((x[4],y[4]),(x[5],y[5]))
+
+        # find the equation of the line perpendicular to the line connecting bottom left and bottom right
+        # and passing through bottom middle
+        m_depth, b_depth = perp_line(m_bot,(x[3],y[3]))
+
+        # find the intersection of the bottom line and the depth line
+        inter = intersection(m_bot,b_bot,m_depth,b_depth)
+
+        # find the depth (pixel distance between bottom middle and inter * units_per_pixel)
+        depth = dist(inter,(x[3],y[3])) * units_per_pixel
+
+        #!!! plot THIS TOO!!!!!!
+
+    if show:
+        plt.show()
+
+
+
+
+# finds the intersection of two lines given their slope and intercepts
+# returns as a tuple (x,y)
+def intersection(m1,b1,m2,b2):
+    if m2 == np.infty:
+        x = b2 # this is the correct answer as dealt with by the special case in perp_line()
+    else:
+        x = (b2-b1)/(m1-m2)
+    y = m1*x+b1
+    return (x,y)
+
+# finds line perpendicular to slope passing through pt
+# returns m and b where m and b correspond to y = mx + b
+# pt is a tuple
+def perp_line(slope,pt):
+    if slope == 0: # special case
+        m = np.infty
+        b = pt[0] # b becomes the x value for use in intersection function
+    else:
+        m = -slope
+        b = pt[1]-pt[0]*m
+    return m, b
+
+# takes 2 points and finds the distance between them
+# points are tuples in the form (x,y)
+def dist(pt1,pt2):
+    return np.sqrt((pt2[0]-pt1[0])**2 + (pt2[1]-pt1[1])**2)
+
+# takes 2 pts and returns m and b where m and b correspond to y = mx + b
+# points are tuples of the form (x,y)
+def line_between_2_pts(pt1,pt2):
+    if (pt2[0]-pt1[0]) == 0:
+        m = np.infty
+        b = np.infty
+    else:
+        m = (pt2[1]-pt1[1])/(pt2[0]-pt1[0])
+        b = pt1[1]-pt1[0]*m
+    return m, b
+
+
+# input image name and models, get out the model's prediction **on the original sized image**
+def predict(models,image_name,plot=True):
 
     # Process the image for model
     img = cv2.imread(image_name, cv2.IMREAD_GRAYSCALE)
+    if plot==True:
+        img_for_plot = cv2.imread(image_name)
     original_width = img.shape[1]
     original_height = img.shape[0]
     img = convertToSquare(img)
     img = resize288(img)
-    if plot==True:
-        img_for_plot = img.copy()
     
     # Get the outline of the cross section
     outline = find_outline(img,original_width,original_height)
@@ -127,10 +214,31 @@ def predict(models,image_name,plot=True): #!!!
 
     # Move the predictions to the closest point on the outline
     edgeX, edgeY = find_closest_edge(x_vals_predicted,y_vals_predicted,outline)
-    
+
+    # Rescale the predictions to the original size image
+    scaledX, scaledY = scale_to_orig(edgeX,edgeY,original_width,original_height)
+
     if plot == True:
-        plotSample(img_for_plot,edgeX,edgeY)
-    #!!!return x_vals_predicted,y_vals_predicted
+        plotSample(img_for_plot,scaledX,scaledY)
+
+    return scaledX,scaledY
+
+# takes the arrays of predicted x and y values and rescales (from 288x288) them so they will be plotted on the proper place on the
+# original image
+def scale_to_orig(x,y,original_width,original_height):
+    # scaling x is a simple proportion
+    scaledX = (original_width/288.) * x
+    # y is more complicated since the photos are "pasted" onto middle of black square the size of the width
+    # first scale down from (288 x 288) to (288 x scaled_orig_height), where scaled_orig_height (called h)
+    # is proportionate to the original height:width ratio and width is 288
+    h = (float(original_height)/float(original_width)) * 288.
+    # next, find the gap between the top of the "pasted" (288 x 288) picture and the actual photo
+    c = (288.-h)/2.
+    # now translate the y values to compensate for that gap
+    ys = y-c
+    # now scale same as for x but with the scaled_orig_height (h)
+    scaledY = ys*(original_height/h)
+    return scaledX, scaledY
 
 # takes the arrays of predicted x and y values, and for each pair finds the point on the edge of the cross section
 # it is closest to
@@ -306,3 +414,5 @@ def build_model():
     )
 
     return net
+
+mod = load_model()
