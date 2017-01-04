@@ -115,10 +115,10 @@ def label(models,image_name,units="pixels",units_per_pixel=1,lab_bottom=True,sho
     # find the predicted points according to the model
     x, y = predict(models,image_name,plot=False)
     
-    # find the equation of the line connecting top left and top right
+    # find the equation of the line connecting top_left and top_right
     m_width, b_width = line_between_2_pts((x[0],y[0]),(x[2],y[2]))
 
-    # find the equation of the line perpendicular to the line connecting top left and top right
+    # find the equation of the line perpendicular to the line connecting top_left and top_right
     # and passing through top middle
     m_height, b_height = perp_line(m_width,(x[1],y[1]))
     
@@ -130,6 +130,11 @@ def label(models,image_name,units="pixels",units_per_pixel=1,lab_bottom=True,sho
 
     # find the height (pixel distance between top middle and inter * units_per_pixel)
     height = dist(inter,(x[1],y[1])) * units_per_pixel
+    
+    # find the "drawn width line" that will be drawn on the photo. It should be parallel to the line
+    # connecting top left and top right, and n pixels "up" in the perpendicular direction from the top middle
+    n = 5
+    m_width_draw, b_width_draw = find_drawn_width_line((x[1],y[1]),m_height,b_height,m_width,n) #!!!
 
     #!!! plot this
 
@@ -152,7 +157,44 @@ def label(models,image_name,units="pixels",units_per_pixel=1,lab_bottom=True,sho
     if show:
         plt.show()
 
+# find the "drawn width line" that will be drawn on the photo. It should be parallel to the line
+# connecting top left and top right (m_width), and n pixels "up" in the perpendicular direction (m_height) from the top middle
+def find_drawn_width_line(top_middle,m_height,b_height,m_width,n): #!!!!!!!!!!!!!!!!!! Formula's are wrong
+    if m_height == np.infty: # special case
+        m = 0 # slope is 0
+        b = top_middle[1] + n # b becomes y value + n and line is given by y = b
+    else:
+        # Do lots of algebra
+        x = top_middle[0]
+        y = top_middle[1]
+        a = 1. + m_height**2.
+        b = 2.*m_height*b_height - 2.*x - 2.*y*m_height
+        c = n**2.-x**2.-y**2.+2.*y*b_height-b_height**2.
 
+        # use pythagorean theorem to find the 2 potential x values for the point n units away from top_middle and on the height line
+        x_plus = (-b+np.sqrt(b**2.-4.*a*c))/(2.*a)
+        x_minus = (-b-np.sqrt(b**2.-4.*a*c))/(2.*a)
+        y_plus = m_height*x_plus + b_height
+        y_minus = m_height*x_minus + b_height
+        
+        print x_plus,y_plus
+        print x_minus,y_minus
+
+        # take the x value that gives the higher y value (since we want the line to be "above")
+        if y_plus>y_minus: #!!!
+            xx = x_plus
+            yy = y_plus
+        else:
+            xx = x_minus
+            yy = y_minus
+
+        # now we know we want our drawn line to have the slope of m_width, and we can use the xx,yy we
+        # just found to find our intercept bb
+        bb = yy - m_width*xx
+        m = m_width
+        b = bb
+
+    return m,b
 
 
 # finds the intersection of two lines given their slope and intercepts
@@ -170,8 +212,8 @@ def intersection(m1,b1,m2,b2):
 # pt is a tuple
 def perp_line(slope,pt):
     if slope == 0: # special case
-        m = np.infty
-        b = pt[0] # b becomes the x value for use in intersection function
+        m = np.infty # make m infinity to "alert" other functions
+        b = pt[0] # b becomes the x value and line is given by x = b
     else:
         m = -slope
         b = pt[1]-pt[0]*m
@@ -185,9 +227,9 @@ def dist(pt1,pt2):
 # takes 2 pts and returns m and b where m and b correspond to y = mx + b
 # points are tuples of the form (x,y)
 def line_between_2_pts(pt1,pt2):
-    if (pt2[0]-pt1[0]) == 0:
-        m = np.infty
-        b = np.infty
+    if (pt2[0]-pt1[0]) == 0: # special case
+        m = np.infty # make m infinity
+        b = pt1[0] # b becomes the x value
     else:
         m = (pt2[1]-pt1[1])/(pt2[0]-pt1[0])
         b = pt1[1]-pt1[0]*m
