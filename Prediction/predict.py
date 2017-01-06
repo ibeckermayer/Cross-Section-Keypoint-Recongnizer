@@ -110,78 +110,189 @@ def load_model():
 # Auto label the image for width, height, and depth
 # Input the list of models (from load_model()), image name (string) , units (string), and units per pixel (float) and get a labeled image as the output
 # lab_bottom determines whether it will label the bottom of the weld (some welds don't go all the way through)
-def label(models,image_name,units="pixels",units_per_pixel=1,lab_bottom=True,show=True):
-    
+def label(models,image_name,units="px",units_per_pixel=1,lab_bottom=True,show=True):
     # find the predicted points according to the model
     x, y = predict(models,image_name,plot=False)
-    
-    # find the equation of the line connecting top_left and top_right
-    m_width, b_width = line_between_2_pts((x[0],y[0]),(x[2],y[2]))
+    # separate points into tuples
+    top_left   = (x[0],y[0])
+    top_middle = (x[1],y[1])
+    top_right  = (x[2],y[2])
+    bottom_middle = (x[3],y[3])
+    bottom_left = (x[4],y[4])
+    bottom_right = (x[5],y[5])
+    # find all the boundaries and lengths for labeling
+    left_width_boundary,right_width_boundary,top_height_boundary,bottom_height_boundary,top_depth_boundary,bottom_depth_boundary,width,height,depth,inter,inter2 = find_all_boundaries_and_lengths(top_left,top_middle,top_right,bottom_middle,bottom_left,bottom_right,units_per_pixel)
+    # plot
+    fig,ax = plot_labels(image_name,top_left,top_middle,top_right,bottom_middle,bottom_left,bottom_right,left_width_boundary,right_width_boundary,top_height_boundary,bottom_height_boundary,top_depth_boundary,bottom_depth_boundary,lab_bottom,width,height,depth,units,units_per_pixel,inter,inter2)
+    if show:
+        plt.axis('off')
+        plt.show()
 
+# plot all the labels
+def plot_labels(image_name,top_left,top_middle,top_right,bottom_middle,bottom_left,bottom_right,left_width_boundary,right_width_boundary,top_height_boundary,bottom_height_boundary,top_depth_boundary,bottom_depth_boundary,lab_bottom,width,height,depth,units,units_per_pixel,inter,inter2):
+    line_color='red'
+    fig, ax = plt.subplots()
+    img = plt.imread(image_name)
+    ax.imshow(img,interpolation='nearest')
+    ax.plot(np.array([top_left[0],left_width_boundary[0]]),np.array([top_left[1],left_width_boundary[1]]),color=line_color)
+    ax.plot(np.array([top_right[0],right_width_boundary[0]]),np.array([top_right[1],right_width_boundary[1]]),color=line_color)
+    # save width line as a variable for labeling
+    width_line, = ax.plot(np.array([left_width_boundary[0],right_width_boundary[0]]),np.array([left_width_boundary[1],right_width_boundary[1]]),color=line_color)
+    ax.plot(np.array([top_left[0],top_right[0]]),np.array([top_left[1],top_right[1]]),color=line_color,linestyle='--')
+    # find midpoint for text
+    width_text_point = midpoint(left_width_boundary,right_width_boundary)
+    ax.plot(np.array([top_middle[0],top_height_boundary[0]]),np.array([top_middle[1],top_height_boundary[1]]),color=line_color)
+    ax.plot(np.array([inter[0],bottom_height_boundary[0]]),np.array([inter[1],bottom_height_boundary[1]]),color=line_color)
+    # save height line as a variable for labeling
+    height_line, = ax.plot(np.array([top_height_boundary[0],bottom_height_boundary[0]]),np.array([top_height_boundary[1],bottom_height_boundary[1]]),color=line_color)
+    # find midpoint, angle for text
+    height_text_point = midpoint(bottom_height_boundary,top_height_boundary)
+    if lab_bottom:
+        # plot
+        ax.plot(np.array([bottom_left[0],bottom_right[0]]),np.array([bottom_left[1],bottom_right[1]]),color=line_color,linestyle='--')
+        ax.plot(np.array([inter2[0],top_depth_boundary[0]]),np.array([inter2[1],top_depth_boundary[1]]),color=line_color)
+        ax.plot(np.array([bottom_middle[0],bottom_depth_boundary[0]]),np.array([bottom_middle[1],bottom_depth_boundary[1]]),color=line_color)
+        depth_line = ax.plot(np.array([top_depth_boundary[0],bottom_depth_boundary[0]]),np.array([top_depth_boundary[1],bottom_depth_boundary[1]]),color=line_color)
+        # label
+        depth_text_point = midpoint(bottom_depth_boundary,top_depth_boundary)
+        label_line(height_line,str('%.2f'%depth)+' '+units,depth_text_point[0],depth_text_point[1],'depth')
+    # Label all text at the end to avoid messing up aspect ratios:
+    label_line(width_line,str('%.2f'%width)+' '+units,width_text_point[0],width_text_point[1],'width')
+    label_line(height_line,str('%.2f'%height)+' '+units,height_text_point[0],height_text_point[1],'height')
+    return fig, ax
+
+
+# find all the boundaries for labeling
+def find_all_boundaries_and_lengths(top_left,top_middle,top_right,bottom_middle,bottom_left,bottom_right,units_per_pixel):
+    # find the equation of the line connecting top_left and top_right
+    m_width, b_width = line_between_2_pts(top_left,top_right)
     # find the equation of the line perpendicular to the line connecting top_left and top_right
     # and passing through top middle
-    m_height, b_height = perp_line(m_width,(x[1],y[1]))
-    
+    m_height, b_height = perp_line(m_width,top_middle)
     # find the intersection of the width line and the height line
     inter = intersection(m_width,b_width,m_height,b_height)
-
     # find the width (pixel distance between top left and top right * units_per_pixel)
-    width = dist((x[0],y[0]),(x[2],y[2])) * units_per_pixel
-
+    width = dist(top_left,top_right) * units_per_pixel
     # find the height (pixel distance between top middle and inter * units_per_pixel)
-    height = dist(inter,(x[1],y[1])) * units_per_pixel
-    
+    height = dist(inter,top_middle) * units_per_pixel
     # find the "drawn width line" that will be drawn on the photo. It should be parallel to the line
     # connecting top left and top right, and n pixels "up" in the perpendicular direction from the top middle
-    n = 5
-    m_width_draw, b_width_draw = find_drawn_width_line((x[1],y[1]),m_height,b_height,m_width,n) #!!!
+    n = 40
+    m_width_draw, b_width_draw = find_drawn_width_line(top_middle,m_height,b_height,m_width,n)
+    # find the boundary points of the draw line. These will be the intersection of the lines going through the left_top/right_top points with
+    # the slope of m_height, and the draw line. They will be tuples (x,y)
+    left_width_boundary = find_width_bound(m_width_draw,b_width_draw,m_height,top_left)
+    right_width_boundary = find_width_bound(m_width_draw,b_width_draw,m_height,top_right)
+    # take midpoint of the midpoint between the intersection point and the top right as the bottom height label boundary
+    bottom_height_boundary = midpoint(midpoint(inter,top_right),top_right)
+    # find the line going through this point with slope m_height
+    m_height_draw = m_height
+    b_height_draw = bottom_height_boundary[1] - m_height_draw*bottom_height_boundary[0]
+    # find the line going through top_middle with slope m_width
+    mm = m_width
+    bb = top_middle[1] - top_middle[0]*mm
+    # take the intersection between the last 2 lines as the top height boundary
+    top_height_boundary = intersection(m_height_draw,b_height_draw,mm,bb)
+    # find equation of the line connecting bottom left and bottom right
+    m_bot, b_bot = line_between_2_pts(bottom_left,bottom_right)
+    # find the equation of the line perpendicular to the line connecting bottom left and bottom right
+    # and passing through bottom middle
+    m_depth, b_depth = perp_line(m_bot,bottom_middle)
+    # find the intersection of the bottom line and the depth line
+    inter2 = intersection(m_bot,b_bot,m_depth,b_depth)
+    # find the depth (pixel distance between bottom middle and inter * units_per_pixel)
+    depth = dist(inter2,bottom_middle) * units_per_pixel
+    # find the equation of the line with slope m_depth going through bottom_height_boundary
+    m_depth_draw = m_depth
+    b_depth_draw = bottom_height_boundary[1] - m_depth_draw*bottom_height_boundary[0]
+    # top depth boundary is intersection of this line and the line connecting bottom left and bottom right (m_bot,b_bot)
+    top_depth_boundary = intersection(m_bot,b_bot,m_depth_draw,b_depth_draw)
+    # find equation going through bottom_middle with slope m_bot
+    mm2 = m_bot
+    bb2 = bottom_middle[1] - mm2*bottom_middle[0]
+    # bottom depth boundary is intersection of depth draw line and this line
+    bottom_depth_boundary = intersection(mm2,bb2,m_depth_draw,b_depth_draw)
+    return left_width_boundary,right_width_boundary,top_height_boundary,bottom_height_boundary,top_depth_boundary,bottom_depth_boundary,width,height,depth,inter,inter2
 
-    #!!! plot this
 
-    if lab_bottom:
-        # find equation of the line connecting bottom left and bottom right
-        m_bot, b_bot = line_between_2_pts((x[4],y[4]),(x[5],y[5]))
 
-        # find the equation of the line perpendicular to the line connecting bottom left and bottom right
-        # and passing through bottom middle
-        m_depth, b_depth = perp_line(m_bot,(x[3],y[3]))
+def label_line(line, label, x, y, hor_or_vert,color='red', size=7):
+    """Add a label to a line, at the proper angle.
+        
+        Arguments
+        ---------
+        line : matplotlib.lines.Line2D object,
+        label : str
+        x : float
+        x-position to place center of text (in data coordinated
+        y : float
+        y-position to place center of text (in data coordinates)
+        color : str
+        size : float
+        """
+    xdata, ydata = line.get_data()
+    x1 = xdata[0]
+    x2 = xdata[-1]
+    y1 = ydata[0]
+    y2 = ydata[-1]
+    
+    ax = line.get_axes()
+    if hor_or_vert == 'width':
+        text = ax.annotate(label, xy=(x, y), xytext=(0, 5),
+                       textcoords='offset points',
+                       size=size, color=color,
+                       horizontalalignment='center',
+                       verticalalignment='center')
+    if hor_or_vert == 'height' or hor_or_vert == 'depth':
+        text = ax.annotate(label, xy=(x, y), xytext=(5, 0),
+                           textcoords='offset points',
+                           size=size, color=color,
+                           horizontalalignment='center',
+                           verticalalignment='center')
+        
+    sp1 = ax.transData.transform_point((x1, y1))
+    sp2 = ax.transData.transform_point((x2, y2))
+                       
+    rise = (sp2[1] - sp1[1])
+    run = (sp2[0] - sp1[0])
+                       
+    slope_degrees = np.degrees(np.arctan2(rise, run))
+    text.set_rotation(slope_degrees)
+    return text
 
-        # find the intersection of the bottom line and the depth line
-        inter = intersection(m_bot,b_bot,m_depth,b_depth)
+def midpoint(p1,p2):
+    return ((p1[0]+p2[0])/2.,(p1[1]+p2[1])/2.)
 
-        # find the depth (pixel distance between bottom middle and inter * units_per_pixel)
-        depth = dist(inter,(x[3],y[3])) * units_per_pixel
-
-        #!!! plot THIS TOO!!!!!!
-
-    if show:
-        plt.show()
+# find the boundary points of the draw line. These will be the intersection of the lines going through the left_top/right_top points with
+# the slope of m_height, and the draw line. They will be tuples (x,y)
+def find_width_bound(m_width_draw,b_width_draw,m,pt):
+    x = pt[0]
+    y = pt[1]
+    b = y-m*x
+    return intersection(m_width_draw,b_width_draw,m,b)
 
 # find the "drawn width line" that will be drawn on the photo. It should be parallel to the line
 # connecting top left and top right (m_width), and n pixels "up" in the perpendicular direction (m_height) from the top middle
-def find_drawn_width_line(top_middle,m_height,b_height,m_width,n): #!!!!!!!!!!!!!!!!!! Formula's are wrong
+def find_drawn_width_line(top_middle,m_height,b_height,m_width,n):
     if m_height == np.infty: # special case
         m = 0 # slope is 0
         b = top_middle[1] + n # b becomes y value + n and line is given by y = b
     else:
-        # Do lots of algebra
+        # Do lots of algebra: find the pts n units from
         x = top_middle[0]
         y = top_middle[1]
-        a = 1. + m_height**2.
+        a = m_height**2. + 1
         b = 2.*m_height*b_height - 2.*x - 2.*y*m_height
-        c = n**2.-x**2.-y**2.+2.*y*b_height-b_height**2.
+        c = b_height**2. - 2*y*b_height + y**2 + x**2 - n**2
 
         # use pythagorean theorem to find the 2 potential x values for the point n units away from top_middle and on the height line
         x_plus = (-b+np.sqrt(b**2.-4.*a*c))/(2.*a)
         x_minus = (-b-np.sqrt(b**2.-4.*a*c))/(2.*a)
         y_plus = m_height*x_plus + b_height
         y_minus = m_height*x_minus + b_height
-        
-        print x_plus,y_plus
-        print x_minus,y_minus
 
         # take the x value that gives the higher y value (since we want the line to be "above")
-        if y_plus>y_minus: #!!!
+        if y_plus<y_minus: #!!!
             xx = x_plus
             yy = y_plus
         else:
@@ -215,7 +326,7 @@ def perp_line(slope,pt):
         m = np.infty # make m infinity to "alert" other functions
         b = pt[0] # b becomes the x value and line is given by x = b
     else:
-        m = -slope
+        m = -1./slope
         b = pt[1]-pt[0]*m
     return m, b
 
