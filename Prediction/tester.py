@@ -4,7 +4,7 @@ import sys
 from collections import OrderedDict
 
 import matplotlib as mlp
-mlp.use('Agg')
+#!!!mlp.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.spatial.distance import cdist
@@ -13,7 +13,7 @@ import xml.etree.ElementTree as et
 import cv2
 import theano
 from lasagne import layers
-from lasagne.updates import nestersov_momentum
+from lasagne.updates import nesterov_momentum
 from nolearn.lasagne import BatchIterator, NeuralNet
 
 try:
@@ -61,9 +61,9 @@ class EarlyStopping(object):
         elif self.best_valid_epoch + self.patience < current_epoch:
             print("Early stopping.")
             print("Best valid loss was {:.6f} at epoch {}.".format(
-                                                                   self.best_valid, self.best_valid_epoch))
-                                                                   nn.load_params_from(self.best_weights)
-                                                                   raise StopIteration()
+                self.best_valid, self.best_valid_epoch))
+            nn.load_params_from(self.best_weights)
+            raise StopIteration()
 
 def float32(k):
     return np.cast['float32'](k)
@@ -88,7 +88,7 @@ def convertToSquare(image):
     
     black_square[halfway_down_square - halfway_down_image:halfway_down_square + halfway_down_image,:] = roi
 
-return black_square
+    return black_square
 
 # Resizes image to 288 x 288
 def resize288(image):
@@ -332,11 +332,11 @@ def label_line(line, label, x, y, hor_or_vert, color=LABEL_COLOR, size=LABEL_SIZ
                            size=size, color=color,
                            horizontalalignment='center',
                            verticalalignment='center')
-    
+
     sp1 = ax.transData.transform_point((x1, y1))
     sp2 = ax.transData.transform_point((x2, y2))
 
-rise = (sp2[1] - sp1[1])
+    rise = (sp2[1] - sp1[1])
     run = (sp2[0] - sp1[0])
     
     slope_degrees = np.degrees(np.arctan2(rise, run))
@@ -389,7 +389,7 @@ def find_drawn_width_line(top_middle,m_height,b_height,m_width,n):
         bb = yy - m_width*xx
         m = m_width
         b = bb
-    
+
     return m,b
 
 
@@ -445,9 +445,9 @@ def predict(models,image_name,plot=True):
     # Get the outline of the cross section
     outline, top_outline = find_outline(img,original_width,original_height)
 
-# Make prediction with the models
-x_vals_predicted, y_vals_predicted = make_prediction(imgp, models)
-    
+    # Make prediction with the models
+    x_vals_predicted, y_vals_predicted = make_prediction(imgp, models)
+
     # Rescale the predictions to the original size image
     scaledX, scaledY = scale_to_orig(x_vals_predicted,y_vals_predicted,original_width,original_height)
     
@@ -456,20 +456,20 @@ x_vals_predicted, y_vals_predicted = make_prediction(imgp, models)
     
     # find the points defining the top edge
     top_left_edgepoint, top_right_edgepoint = findEdgePoints(outline,top_outline,edgeX,edgeY)
-    
+
     # revise top_left and top_right predictions to be more accurate
     #!!!Xfinal,Yfinal = reviseTopLeftAndTopRight(top_outline,top_left_edgepoint,top_right_edgepoint,edgeX,edgeY)
-    
+
     #!!! testing FarthestDistanceFromTopLine
-    
-    
+
+
     if plot == True:
         plotSample(img_for_plot,scaledX,scaledY)
         plotSample(imgp,x_vals_predicted,y_vals_predicted)
         plotSample(img_for_plot,edgeX,edgeY)
         plotSample(outline,edgeX,edgeY)
         plt.show()
-    
+
     return edgeX,edgeY,original_width,original_height,top_left_edgepoint,top_right_edgepoint # edgeY and edgeX should become Xfinal and Yfinal !!!
 
 # Takes outline, top_outline arrays and full X and Y prediction arrays (all 6 points) and returns top_left_edgepoint and top_right_edgepoint as (x,y) pairs
@@ -487,7 +487,7 @@ def findEdgePoints(outline,top_outline,X,Y):
 # Takes top_outline, top_left_edgepoint, top_right_edgepoint and full X and Y prediction arrays (all 6 points) and revises top_left and top_right
 # (X/Y[0] and X/Y[2]) via empirically derived algorithm that searches for said points in relation to the top edge line
 def reviseTopLeftAndTopRight(top_outline,top_left_edgepoint,top_right_edgepoint,X,Y):
-    return None
+    return None #!!!
 
 # takes the arrays of predicted x and y values and rescales (from 288x288) them so they will be plotted on the proper place on the
 # original image
@@ -536,7 +536,7 @@ def find_closest_edge(xvals,yvals,outline):
     edgeY = closest_pts[:,0]
 
 
-return edgeX, edgeY
+    return edgeX, edgeY
 
 # takes in 288x288 image and makes a prediction using the models
 # returns array xvals & yvals, with columns corresponding to which point
@@ -556,7 +556,7 @@ def make_prediction(img,models):
     
     y_pred = np.transpose(y_pred)
 
-xvals = y_pred[0::2]*144+144
+    xvals = y_pred[0::2]*144+144
     yvals = y_pred[1::2]*144+144
     
     return xvals, yvals
@@ -597,15 +597,15 @@ def find_outline(img,original_width,original_height):
                 outline[i,j] = 255 # make the pixel in the outline array white
                 break
 
-# delete standalone pixels (these can throw off predictions)
-for j in xrange(1,columns-1):
-    for i in xrange(1,rows-1):
-        if outline[i,j]==255 and outline[i-1,j-1]==0 and outline[i-1,j]==0 and outline[i-1,j+1]==0 and outline[i,j-1]==0 and outline[i,j+1]==0 and outline[i+1,j-1]==0 and outline[i+1,j]==0 and outline[i+1,j+1]==0:
-            outline[i,j] = 0
+    # delete standalone pixels (these can throw off predictions)
+    for j in xrange(1,columns-1):
+        for i in xrange(1,rows-1):
+            if outline[i,j]==255 and outline[i-1,j-1]==0 and outline[i-1,j]==0 and outline[i-1,j+1]==0 and outline[i,j-1]==0 and outline[i,j+1]==0 and outline[i+1,j-1]==0 and outline[i+1,j]==0 and outline[i+1,j+1]==0:
+                outline[i,j] = 0
                 top_outline[i,j] = 0
 
 
-return outline, top_outline
+    return outline, top_outline
 
 
 def plotSample(img,x,y):
@@ -650,7 +650,7 @@ def findTopLine(outline,top_outline):
             m_final = key
             b_final = d[key][0]
 
-return m_final, b_final
+    return m_final, b_final
 
 # takes the outline and finds the maximum and minimum slope for the top line,
 # the heuristic being that the slope can't be greater or less than
@@ -677,7 +677,7 @@ def findMaxMinSlopes(outline):
             bottom_r = (outline.shape[1]-1,i)
             break
 
-min_m, _ = line_between_2_pts(bottom_l,top_r)
+    min_m, _ = line_between_2_pts(bottom_l,top_r)
     max_m, _ = line_between_2_pts(bottom_r,top_l)
     min_m = min_m/2.
     max_m = max_m/2.
@@ -757,3 +757,69 @@ def build_model():
 
 mod = load_model()
 #autoLabel(mod)
+
+
+def FarthestDistanceFromTopLine(top_left_edgepoint,top_right_edgepoint,top_outline):
+    m, b = line_between_2_pts(top_left_edgepoint,top_right_edgepoint)
+    left_connection  = (0,0)
+    left_max_dist = -1
+    right_connection = (0,0)
+    right_max_dist = -1
+    top_outline_left  = np.hstack((top_outline[:,0:top_outline.shape[1]/2],np.zeros((top_outline.shape[0],top_outline.shape[1]-top_outline.shape[1]/2))))
+    top_outline_right = np.hstack((np.zeros((outline.shape[0],top_outline.shape[1]/2)),top_outline[:,top_outline.shape[1]/2:top_outline.shape[1]]))
+    left_edge_pts = np.transpose(np.nonzero(top_outline_left>0))
+    left_edge_pts[:,[0,1]] = left_edge_pts[:,[1,0]] # make (x,y)
+    right_edge_pts = np.transpose(np.nonzero(top_outline_right>0))
+    right_edge_pts[:,[0,1]] = right_edge_pts[:,[1,0]] # make (x,y)
+
+    for i in xrange(left_edge_pts.shape[0]):
+        pt = (left_edge_pts[i,0],left_edge_pts[i,1])
+        dist = distanceFromPointToLine(pt,m,b)
+        if dist>left_max_dist and m*pt[0]+b < pt[1]:
+            left_max_dist=dist
+            left_connection=pt
+
+    for i in xrange(right_edge_pts.shape[0]):
+        pt = (right_edge_pts[i,0],right_edge_pts[i,1])
+        dist = distanceFromPointToLine(pt,m,b)
+        if dist>right_max_dist and m*pt[0]+b < pt[1]:
+            right_max_dist=dist
+            right_connection=pt
+
+    return left_connection, right_connection
+
+
+def distanceFromPointToLine(pt,m,intercept):
+    x = pt[0]
+    y = pt[1]
+    a = -m
+    b = 1
+    c = - intercept
+    dist = (np.abs(a*x+b*y+c))/(np.sqrt(a**2.+b**2.))
+    return dist
+
+###!!! everything above this line should be copied to full program
+
+image_name = "265.jpg"
+
+img = cv2.imread(image_name, cv2.IMREAD_GRAYSCALE)
+original_width = img.shape[1]
+original_height = img.shape[0]
+# Get the outline of the cross section
+outline, top_outline = find_outline(img,original_width,original_height)
+
+edgeX,edgeY,original_width,original_height,top_left_edgepoint,top_right_edgepoint = predict(mod,image_name,plot=False)
+left_connection,right_connection = FarthestDistanceFromTopLine(top_left_edgepoint,top_right_edgepoint,top_outline)
+plt.imshow(img, cmap='gray')
+plt.scatter([left_connection[0],right_connection[0]],[left_connection[1],right_connection[1]])
+plt.show()
+
+#
+
+#!!! This is the full program, just used as a testing file
+# In predict, make another function that takes in the edgeX, edgeY predictions
+
+# build functions to find the pt where the top_outline intersects the left top line and right top lines respectively
+# make a script that goes through each photo in the representative sample you have chosen, and for each sample adds to a CSV
+# file: image_name, distance from farthest from top line to top line, distance along top line from intersection to farthest from (left, then right for these last 2 columns), save photo of both predictions for each photo under similar name.
+# use all of this data to find a cutoff for distance from top line and/or distance from intersection to farthest (as a backup) to determine which hueristic to use for each photo.

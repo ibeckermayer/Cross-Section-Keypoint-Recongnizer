@@ -241,7 +241,6 @@ def augWithHorizontalFlip(X,y,flip_inds=False):
 
     return X, y
 
-
 # augments X and y with "dummy columns" that work as similar features to the features in model we are trying to train.
 # more quantitatively, it loads the data for the dummy columns and flips the photos/outputs vertically
 def augWithDummy(X,y,dummy_columns):
@@ -256,12 +255,6 @@ def augWithDummy(X,y,dummy_columns):
     y = np.vstack((y,y_dummy))
 
     return X, y
-
-
-
-
-
-
 
 # Adds 4 different types of noise to a photo.
 # It it adds each type of noise 4 times on each photo to make the effect more dramatic.
