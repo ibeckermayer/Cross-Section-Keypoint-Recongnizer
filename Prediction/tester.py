@@ -455,7 +455,7 @@ def predict(models,image_name,plot=True):
     edgeX, edgeY = find_closest_edge(scaledX,scaledY,outline)
     
     # find the points defining the top edge
-    top_left_edgepoint, top_right_edgepoint = findEdgePoints(outline,top_outline,edgeX,edgeY)
+    top_left_edgepoint, top_right_edgepoint, mleft, bleft, mright, bright = findEdgePoints(outline,top_outline,edgeX,edgeY)
 
     # revise top_left and top_right predictions to be more accurate
     #!!!Xfinal,Yfinal = reviseTopLeftAndTopRight(top_outline,top_left_edgepoint,top_right_edgepoint,edgeX,edgeY)
@@ -470,7 +470,7 @@ def predict(models,image_name,plot=True):
         plotSample(outline,edgeX,edgeY)
         plt.show()
 
-    return edgeX,edgeY,original_width,original_height,top_left_edgepoint,top_right_edgepoint # edgeY and edgeX should become Xfinal and Yfinal !!!
+    return edgeX,edgeY,original_width,original_height,top_left_edgepoint,top_right_edgepoint, mleft, bleft, mright, bright # edgeY and edgeX should become Xfinal and Yfinal !!!
 
 # Takes outline, top_outline arrays and full X and Y prediction arrays (all 6 points) and returns top_left_edgepoint and top_right_edgepoint as (x,y) pairs
 def findEdgePoints(outline,top_outline,X,Y):
@@ -482,7 +482,7 @@ def findEdgePoints(outline,top_outline,X,Y):
     mright,bright = findTopLine(outline,top_outline_right)
     top_left_edgepoint = (0,bleft)
     top_right_edgepoint= (outline.shape[1]-1,mright*(outline.shape[1]-1)+bright)
-    return top_left_edgepoint, top_right_edgepoint
+    return top_left_edgepoint, top_right_edgepoint, mleft, bleft, mright, bright
 
 # Takes top_outline, top_left_edgepoint, top_right_edgepoint and full X and Y prediction arrays (all 6 points) and revises top_left and top_right
 # (X/Y[0] and X/Y[2]) via empirically derived algorithm that searches for said points in relation to the top edge line
@@ -755,15 +755,15 @@ def build_model():
                     
     return net
 
-mod = load_model()
+#mod = load_model()
 #autoLabel(mod)
 
-
-def FarthestDistanceFromTopLine(top_left_edgepoint,top_right_edgepoint,top_outline):
+# takes the top line and finds the point on the top outline that's farthest below (or above, in the coordinate system) that line.
+def FarthestDistanceBelowTopLine(top_left_edgepoint,top_right_edgepoint,top_outline):
     m, b = line_between_2_pts(top_left_edgepoint,top_right_edgepoint)
-    left_connection  = (0,0)
+    top_left  = (0,0)
     left_max_dist = -1
-    right_connection = (0,0)
+    top_right = (0,0)
     right_max_dist = -1
     top_outline_left  = np.hstack((top_outline[:,0:top_outline.shape[1]/2],np.zeros((top_outline.shape[0],top_outline.shape[1]-top_outline.shape[1]/2))))
     top_outline_right = np.hstack((np.zeros((outline.shape[0],top_outline.shape[1]/2)),top_outline[:,top_outline.shape[1]/2:top_outline.shape[1]]))
@@ -777,16 +777,16 @@ def FarthestDistanceFromTopLine(top_left_edgepoint,top_right_edgepoint,top_outli
         dist = distanceFromPointToLine(pt,m,b)
         if dist>left_max_dist and m*pt[0]+b < pt[1]:
             left_max_dist=dist
-            left_connection=pt
+            top_left=pt
 
     for i in xrange(right_edge_pts.shape[0]):
         pt = (right_edge_pts[i,0],right_edge_pts[i,1])
         dist = distanceFromPointToLine(pt,m,b)
         if dist>right_max_dist and m*pt[0]+b < pt[1]:
             right_max_dist=dist
-            right_connection=pt
+            top_right=pt
 
-    return left_connection, right_connection
+    return top_left, top_right
 
 
 def distanceFromPointToLine(pt,m,intercept):
@@ -798,9 +798,63 @@ def distanceFromPointToLine(pt,m,intercept):
     dist = (np.abs(a*x+b*y+c))/(np.sqrt(a**2.+b**2.))
     return dist
 
+# Takes the top_outline and the top line equations for the left side and the right side, and finds the first point in the top outline
+# that intersects each line, to produce an estimate for top_left and top_right
+def findTopLineIntersectionPoints(top_outline,mleft,bleft,mright,bright):
+    # initialize top_left and top_right
+    top_left = None
+    top_right = None
+    
+    # find (x,y) coordinates of the top_outline and sort them in ascending order from x=0 -> x=num_columns
+    edge_pts = np.transpose(np.nonzero(top_outline>0))
+    edge_pts[:,[0,1]] = edge_pts[:,[1,0]] # make (x,y)
+    edge_pts = edge_pts[edge_pts[:,0].argsort()]
+    
+    # separate into left and right edge points
+    num_pts = edge_pts.shape[0]
+    halfway = num_pts/2
+    left_edge_pts = edge_pts[0:halfway,:]
+    right_edge_pts = edge_pts[halfway:num_pts,:]
+    
+    # starting from x=halfway-1 and moving towards x=0, find the equation of each point in the top_outline and its neigbor to
+    # the left. If the x value of the intersection of this line and the top line left (mleft, bleft) is between the x values
+    # of the point and it's neighbor, then this intersection point is top_left
+    for i in reversed(xrange(halfway)):
+        p1 = left_edge_pts[i,:]
+        if mleft*p1[0]+bleft == p1[1]:
+            top_left = p1
+            break
+        p2 = left_edge_pts[i-1,:]
+        m_neighbor,b_neighbor = line_between_2_pts(p1,p2)
+        if m_neighbor == mleft:
+            continue
+        inter = intersection(m_neighbor,b_neighbor,mleft,bleft)
+        if inter[0] >= p2[0] and inter[0] <= p1[0]:
+            top_left = inter
+            break
+
+    # starting from x=halfway and moving towards x=num_pts, find the equation of each point in the top_outline and its neigbor to
+    # the right. If the x value of the intersection of this line and the top line left (mleft, bleft) is between the x values
+    # of the point and it's neighbor, then this intersection point is top_right
+    for i in xrange(right_edge_pts.shape[0]):
+        p1 = right_edge_pts[i,:]
+        if mright*p1[0]+bright == p1[1]:
+            top_right = p1
+            break
+        p2 = right_edge_pts[i+1,:]
+        m_neighbor,b_neighbor = line_between_2_pts(p1,p2)
+        if m_neighbor == mright:
+            continue
+        inter = intersection(m_neighbor,b_neighbor,mright,bright)
+        if inter[0] >= p1[0] and inter[0] <= p2[0]:
+            top_right = inter
+            break
+
+    return top_left, top_right
+
 ###!!! everything above this line should be copied to full program
 
-image_name = "265.jpg"
+image_name = "266.jpg"
 
 img = cv2.imread(image_name, cv2.IMREAD_GRAYSCALE)
 original_width = img.shape[1]
@@ -808,10 +862,12 @@ original_height = img.shape[0]
 # Get the outline of the cross section
 outline, top_outline = find_outline(img,original_width,original_height)
 
-edgeX,edgeY,original_width,original_height,top_left_edgepoint,top_right_edgepoint = predict(mod,image_name,plot=False)
-left_connection,right_connection = FarthestDistanceFromTopLine(top_left_edgepoint,top_right_edgepoint,top_outline)
+edgeX,edgeY,original_width,original_height,top_left_edgepoint,top_right_edgepoint, mleft, bleft, mright, bright = predict(mod,image_name,plot=False)
+top_left,top_right = FarthestDistanceBelowTopLine(top_left_edgepoint,top_right_edgepoint,top_outline)
+top_left2,top_right2 = findTopLineIntersectionPoints(top_outline,mleft,bleft,mright,bright)
 plt.imshow(img, cmap='gray')
-plt.scatter([left_connection[0],right_connection[0]],[left_connection[1],right_connection[1]])
+plt.scatter([top_left[0],top_right[0]],[top_left[1],top_right[1]])
+plt.scatter([top_left2[0],top_right2[0]],[top_left2[1],top_right2[1]])
 plt.show()
 
 #
@@ -819,7 +875,6 @@ plt.show()
 #!!! This is the full program, just used as a testing file
 # In predict, make another function that takes in the edgeX, edgeY predictions
 
-# build functions to find the pt where the top_outline intersects the left top line and right top lines respectively
 # make a script that goes through each photo in the representative sample you have chosen, and for each sample adds to a CSV
 # file: image_name, distance from farthest from top line to top line, distance along top line from intersection to farthest from (left, then right for these last 2 columns), save photo of both predictions for each photo under similar name.
 # use all of this data to find a cutoff for distance from top line and/or distance from intersection to farthest (as a backup) to determine which hueristic to use for each photo.
