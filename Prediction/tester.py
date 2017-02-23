@@ -1,6 +1,7 @@
 import os
 import pickle
 import sys
+import csv
 from collections import OrderedDict
 
 import matplotlib as mlp
@@ -68,7 +69,7 @@ class EarlyStopping(object):
 def float32(k):
     return np.cast['float32'](k)
 
-def convertToSquare(image):
+def convert_to_square(image):
     height, width = image.shape
     black_square = np.zeros((width/2*2,width/2*2), np.uint8)
     
@@ -91,7 +92,7 @@ def convertToSquare(image):
     return black_square
 
 # Resizes image to 288 x 288
-def resize288(image):
+def resize_288(image):
     image = cv2.resize(image, (288,288))
     return image
 
@@ -118,7 +119,7 @@ def load_model():
 # Label all the photos in the ToBeLabeled directory. Each photo should begin with the photo number (i.e. 90_5x.jpg)
 # and have a corresponding XML file (i.e. 90_5x.jpg_meta.xml)
 # The photos will be given a folder name (based on their number) that contains the original photo, xml file, and labeled photo
-def autoLabel(mod):
+def auto_label(mod):
     for file in os.listdir('ToBeLabeled/'):
         name, ext = os.path.splitext(file)
         if not(ext=='.jpg' or ext=='.png' or ext=='.bmp'):
@@ -128,7 +129,7 @@ def autoLabel(mod):
         if not(os.path.isdir(target_dir)):
             os.mkdir(target_dir)
         XML_file_name = 'ToBeLabeled/' + file + '_meta.xml'
-        scaling_factor = findScalingFactorFromXML(XML_file_name)
+        scaling_factor = find_scaling_factor_from_XML(XML_file_name)
         image_name = 'ToBeLabeled/' + name + ext
         fig, ax = label(mod,image_name,units_per_pixel=scaling_factor,show=False)
         fileName = os.path.join(target_dir,name+'_labeled.png')
@@ -179,7 +180,7 @@ def label(models,image_name,units=r'$\mu m$',units_per_pixel=1,lab_bottom=True,s
     return fig, ax
 
 # Parse the XML file that comes with each cross section in order to find the proper scaling factor for labeling
-def findScalingFactorFromXML(file_name):
+def find_scaling_factor_from_XML(file_name):
     e = et.parse(file_name).getroot() # parse the file
     val = e.find('Scaling/Factor_0') # find the scaling factor
     fact_text = val.text # get the scaling factor (as a string)
@@ -251,9 +252,9 @@ def find_all_boundaries_and_lengths(top_left,top_middle,top_right,bottom_middle,
     # find the intersection of the width line and the height line
     inter = intersection(m_edge,b_edge,m_height,b_height)
     # find the width (pixel distance between top left and top right * units_per_pixel)
-    width = dist(top_left,top_right) * units_per_pixel
+    width = dist_between_two_pts(top_left,top_right) * units_per_pixel
     # find the height (pixel distance between top middle and inter * units_per_pixel)
-    height = dist(inter,top_middle) * units_per_pixel
+    height = dist_between_two_pts(inter,top_middle) * units_per_pixel
     # find the "drawn width line" that will be drawn on the photo. It should be parallel to the line
     # connecting top left and top right, and n pixels "up" in the perpendicular direction from the top middle
     n = 40
@@ -282,7 +283,7 @@ def find_all_boundaries_and_lengths(top_left,top_middle,top_right,bottom_middle,
     # find the intersection of the bottom line and the depth line
     inter2 = intersection(m_bot,b_bot,m_depth,b_depth)
     # find the depth (pixel distance between bottom middle and inter * units_per_pixel)
-    depth = dist(inter2,bottom_middle) * units_per_pixel
+    depth = dist_between_two_pts(inter2,bottom_middle) * units_per_pixel
     # find the equation of the line with slope m_depth going through bottom_height_boundary
     m_depth_draw = m_depth
     b_depth_draw = bottom_height_boundary[1] - m_depth_draw*bottom_height_boundary[0]
@@ -417,7 +418,7 @@ def perp_line(slope,pt):
 
 # takes 2 points and finds the distance between them
 # points are tuples in the form (x,y)
-def dist(pt1,pt2):
+def dist_between_two_pts(pt1,pt2):
     return np.sqrt((pt2[0]-pt1[0])**2 + (pt2[1]-pt1[1])**2)
 
 # takes 2 pts and returns m and b where m and b correspond to y = mx + b
@@ -436,8 +437,8 @@ def line_between_2_pts(pt1,pt2):
 def predict(models,image_name,plot=True):
     # Process the image for model
     img = cv2.imread(image_name, cv2.IMREAD_GRAYSCALE)
-    imgp = convertToSquare(img)
-    imgp = resize288(imgp)
+    imgp = convert_to_square(img)
+    imgp = resize_288(imgp)
     if plot==True:
         img_for_plot = cv2.imread(image_name)
     original_width = img.shape[1]
@@ -455,38 +456,38 @@ def predict(models,image_name,plot=True):
     edgeX, edgeY = find_closest_edge(scaledX,scaledY,outline)
     
     # find the points defining the top edge
-    top_left_edgepoint, top_right_edgepoint, mleft, bleft, mright, bright = findEdgePoints(outline,top_outline,edgeX,edgeY)
+    top_left_edgepoint, top_right_edgepoint, mleft, bleft, mright, bright = find_edge_points(outline,top_outline,edgeX,edgeY)
 
     # revise top_left and top_right predictions to be more accurate
-    #!!!Xfinal,Yfinal = reviseTopLeftAndTopRight(top_outline,top_left_edgepoint,top_right_edgepoint,edgeX,edgeY)
+    #!!!Xfinal,Yfinal = revise_top_left_and_top_right(top_outline,top_left_edgepoint,top_right_edgepoint,edgeX,edgeY)
 
     #!!! testing FarthestDistanceFromTopLine
 
 
     if plot == True:
-        plotSample(img_for_plot,scaledX,scaledY)
-        plotSample(imgp,x_vals_predicted,y_vals_predicted)
-        plotSample(img_for_plot,edgeX,edgeY)
-        plotSample(outline,edgeX,edgeY)
+        plot_sample(img_for_plot,scaledX,scaledY)
+        plot_sample(imgp,x_vals_predicted,y_vals_predicted)
+        plot_sample(img_for_plot,edgeX,edgeY)
+        plot_sample(outline,edgeX,edgeY)
         plt.show()
 
     return edgeX,edgeY,original_width,original_height,top_left_edgepoint,top_right_edgepoint, mleft, bleft, mright, bright # edgeY and edgeX should become Xfinal and Yfinal !!!
 
 # Takes outline, top_outline arrays and full X and Y prediction arrays (all 6 points) and returns top_left_edgepoint and top_right_edgepoint as (x,y) pairs
-def findEdgePoints(outline,top_outline,X,Y):
+def find_edge_points(outline,top_outline,X,Y):
     top_left   = (X[0],Y[0])
     top_right  = (X[2],Y[2])
     top_outline_left = np.hstack((top_outline[:,0:top_left[0]],np.zeros((outline.shape[0],top_outline.shape[1]-top_left[0]))))
     top_outline_right= np.hstack((np.zeros((outline.shape[0],top_right[0])),top_outline[:,top_right[0]:top_outline.shape[1]]))
-    mleft,bleft = findTopLine(outline,top_outline_left)
-    mright,bright = findTopLine(outline,top_outline_right)
+    mleft,bleft = find_top_line(outline,top_outline_left)
+    mright,bright = find_top_line(outline,top_outline_right)
     top_left_edgepoint = (0,bleft)
     top_right_edgepoint= (outline.shape[1]-1,mright*(outline.shape[1]-1)+bright)
     return top_left_edgepoint, top_right_edgepoint, mleft, bleft, mright, bright
 
 # Takes top_outline, top_left_edgepoint, top_right_edgepoint and full X and Y prediction arrays (all 6 points) and revises top_left and top_right
 # (X/Y[0] and X/Y[2]) via empirically derived algorithm that searches for said points in relation to the top edge line
-def reviseTopLeftAndTopRight(top_outline,top_left_edgepoint,top_right_edgepoint,X,Y):
+def revise_top_left_and_top_right(top_outline,top_left_edgepoint,top_right_edgepoint,X,Y):
     return None #!!!
 
 # takes the arrays of predicted x and y values and rescales (from 288x288) them so they will be plotted on the proper place on the
@@ -608,7 +609,7 @@ def find_outline(img,original_width,original_height):
     return outline, top_outline
 
 
-def plotSample(img,x,y):
+def plot_sample(img,x,y):
     plt.figure()
     if img.shape == (1,1,288,288):
         img = img.reshape(288,288)
@@ -617,8 +618,8 @@ def plotSample(img,x,y):
     cv2.destroyAllWindows()
     plt.show()
 
-def findTopLine(outline,top_outline):
-    max_m, min_m = findMaxMinSlopes(outline)
+def find_top_line(outline,top_outline):
+    max_m, min_m = find_max_min_slopes(outline)
     
     maxnumpts = 0 # holds the value for the maximum number of points
     m_final = 0 # initialize final slope value
@@ -655,7 +656,7 @@ def findTopLine(outline,top_outline):
 # takes the outline and finds the maximum and minimum slope for the top line,
 # the heuristic being that the slope can't be greater or less than
 # the slope from one corner of the outline to the other divided by 2
-def findMaxMinSlopes(outline):
+def find_max_min_slopes(outline):
     top_l    = np.infty
     top_r    = np.infty
     bottom_l = np.infty
@@ -755,18 +756,17 @@ def build_model():
                     
     return net
 
-#mod = load_model()
-#autoLabel(mod)
+#!!!mod = load_model()
+#auto_label(mod)
 
-# takes the top line and finds the point on the top outline that's farthest below (or above, in the coordinate system) that line.
-def FarthestDistanceBelowTopLine(top_left_edgepoint,top_right_edgepoint,top_outline):
-    m, b = line_between_2_pts(top_left_edgepoint,top_right_edgepoint)
+# takes the top line and finds the point on the top outline that's farthest below (or above, according to the photo coordinate system) that line.
+def farthest_distance_below_top_line(mleft,bleft,mright,bright,top_outline):
     top_left  = (0,0)
     left_max_dist = -1
     top_right = (0,0)
     right_max_dist = -1
     top_outline_left  = np.hstack((top_outline[:,0:top_outline.shape[1]/2],np.zeros((top_outline.shape[0],top_outline.shape[1]-top_outline.shape[1]/2))))
-    top_outline_right = np.hstack((np.zeros((outline.shape[0],top_outline.shape[1]/2)),top_outline[:,top_outline.shape[1]/2:top_outline.shape[1]]))
+    top_outline_right = np.hstack((np.zeros((top_outline.shape[0],top_outline.shape[1]/2)),top_outline[:,top_outline.shape[1]/2:top_outline.shape[1]]))
     left_edge_pts = np.transpose(np.nonzero(top_outline_left>0))
     left_edge_pts[:,[0,1]] = left_edge_pts[:,[1,0]] # make (x,y)
     right_edge_pts = np.transpose(np.nonzero(top_outline_right>0))
@@ -774,33 +774,33 @@ def FarthestDistanceBelowTopLine(top_left_edgepoint,top_right_edgepoint,top_outl
 
     for i in xrange(left_edge_pts.shape[0]):
         pt = (left_edge_pts[i,0],left_edge_pts[i,1])
-        dist = distanceFromPointToLine(pt,m,b)
-        if dist>left_max_dist and m*pt[0]+b < pt[1]:
+        dist = distance_from_point_to_line(pt,mleft,bleft)
+        if dist>left_max_dist and mleft*pt[0]+bleft < pt[1]:
             left_max_dist=dist
             top_left=pt
 
     for i in xrange(right_edge_pts.shape[0]):
         pt = (right_edge_pts[i,0],right_edge_pts[i,1])
-        dist = distanceFromPointToLine(pt,m,b)
-        if dist>right_max_dist and m*pt[0]+b < pt[1]:
+        dist = distance_from_point_to_line(pt,mright,bright)
+        if dist>right_max_dist and mright*pt[0]+bright < pt[1]:
             right_max_dist=dist
             top_right=pt
 
     return top_left, top_right
 
 
-def distanceFromPointToLine(pt,m,intercept):
+def distance_from_point_to_line(pt,m,intercept):
     x = pt[0]
     y = pt[1]
-    a = -m
-    b = 1
-    c = - intercept
+    a = float(-m)
+    b = 1.
+    c = float(-intercept)
     dist = (np.abs(a*x+b*y+c))/(np.sqrt(a**2.+b**2.))
     return dist
 
 # Takes the top_outline and the top line equations for the left side and the right side, and finds the first point in the top outline
 # that intersects each line, to produce an estimate for top_left and top_right
-def findTopLineIntersectionPoints(top_outline,mleft,bleft,mright,bright):
+def find_top_line_intersection_points(top_outline,mleft,bleft,mright,bright):
     # initialize top_left and top_right
     top_left = None
     top_right = None
@@ -852,29 +852,281 @@ def findTopLineIntersectionPoints(top_outline,mleft,bleft,mright,bright):
 
     return top_left, top_right
 
+# Takes the predictions from farthest_distance_below_top_line() and find_top_line_intersection_points, finds the midpoint
+# between them and then finds the closest point on the top_outline to that point. This new point is sometimes the best prediction.
+def project_from_midpoint_of_2_predictions(pt1,pt2,top_outline):
+    midpt = midpoint(pt1,pt2)
+    # need a length 6 vector for x and y for use with find_closest_edge
+    xx = [midpt[0],0.,0.,0.,0.,0.,0.]
+    yy = [midpt[1],0.,0.,0.,0.,0.,0.]
+    X,Y = find_closest_edge(xx,yy,top_outline)
+    return (X[0],Y[0])
+
+
+
+
 ###!!! everything above this line should be copied to full program
+import pandas as pd
+"""
+# This script is used to generate a data file that contains the distance (and relative based on photo size) between the find_top_line_intersection_points() 
+# and farthest_distance_below_top_line(), the distance (and relative based on photo size) between farthest_distance_below_top_line() and the top line 
+# (on each respective side), the abs() of the slope between find_top_line_intersection_points() and farthest_distance_below_top_line(), and the distance 
+# between find_top_line_intersection_points() and top_middle() for a test set of photos, and attempts to use those as a heuristic for deciding which of the 
+# predictions to choose (intersection, farthest, midpoint, any, none). This script was used before the predict() function was modified.
 
-image_name = "266.jpg"
+data = ['NAME', 'distance_left', 'distance_right', 'relative_dist_left', 'relative_dist_right', 'depth_left', 'depth_right', 'relative_depth_left', 'relative_depth_right', 'abs_slope_left', 'abs_slope_right', 'dist_to_middle_left', 'dist_to_middle_right']
+with open('experiments/experimentData.csv', 'wb') as f:
+    a = csv.writer(f,delimiter=",")
+    a.writerow(data)
+    f.close()
+for file in os.listdir("experiments"):
+    if file.endswith(".jpg"):
+        image_name = "experiments/" + file
+        #plt.close("all")
+        #ax = plt.subplot(111)
 
-img = cv2.imread(image_name, cv2.IMREAD_GRAYSCALE)
-original_width = img.shape[1]
-original_height = img.shape[0]
-# Get the outline of the cross section
-outline, top_outline = find_outline(img,original_width,original_height)
+        img = cv2.imread(image_name, cv2.IMREAD_GRAYSCALE)
+        original_width = img.shape[1]
+        original_height = img.shape[0]
+        # Get the outline of the cross section
+        outline, top_outline = find_outline(img,original_width,original_height)
 
-edgeX,edgeY,original_width,original_height,top_left_edgepoint,top_right_edgepoint, mleft, bleft, mright, bright = predict(mod,image_name,plot=False)
-top_left,top_right = FarthestDistanceBelowTopLine(top_left_edgepoint,top_right_edgepoint,top_outline)
-top_left2,top_right2 = findTopLineIntersectionPoints(top_outline,mleft,bleft,mright,bright)
-plt.imshow(img, cmap='gray')
-plt.scatter([top_left[0],top_right[0]],[top_left[1],top_right[1]])
-plt.scatter([top_left2[0],top_right2[0]],[top_left2[1],top_right2[1]])
+        edgeX,edgeY,original_width,original_height,top_left_edgepoint,top_right_edgepoint, mleft, bleft, mright, bright = predict(mod,image_name,plot=False)
+        top_middle = (edgeX[1],edgeY[1])
+        top_left,top_right = farthest_distance_below_top_line(mleft,bleft,mright,bright,top_outline)
+        top_left2,top_right2 = find_top_line_intersection_points(top_outline,mleft,bleft,mright,bright)
+        top_left3 = project_from_midpoint_of_2_predictions(top_left,top_left2,top_outline)
+        top_right3 = project_from_midpoint_of_2_predictions(top_right,top_right2,top_outline)
+        #img = cv2.imread(image_name, cv2.IMREAD_GRAYSCALE)
+        #plt.imshow(img, cmap='gray')
+        MARKER_SIZE = 12
+        #plt.scatter([top_left[0],top_right[0]],[top_left[1],top_right[1]],s=MARKER_SIZE,c='y',label='farthest')
+        #plt.scatter([top_left2[0],top_right2[0]],[top_left2[1],top_right2[1]],s=MARKER_SIZE,c='r',label='intersection')
+        #plt.scatter([top_left3[0],top_right3[0]],[top_left3[1],top_right3[1]],s=MARKER_SIZE,c='b',label='midpoint')
+        #plt.legend()
+        #plt.title(image_name[12:len(image_name)])
+        distance_left = dist_between_two_pts(top_left,top_left2)
+        distance_right = dist_between_two_pts(top_right,top_right2)
+        relative_dist_left = distance_left/original_width
+        relative_dist_right = distance_right/original_width
+        depth_left = distance_from_point_to_line(top_left,mleft,bleft)
+        depth_right = distance_from_point_to_line(top_right,mright,bright)
+        relative_depth_left = depth_left/original_height
+        relative_depth_right = depth_right/original_height
+        abs_slope_left, _ = line_between_2_pts(top_left,top_left2)
+        abs_slope_left = np.abs(abs_slope_left)
+        abs_slope_right, _ = line_between_2_pts(top_right,top_right2)
+        abs_slope_right = np.abs(abs_slope_right)
+        dist_to_middle_left = dist_between_two_pts(top_left2,top_middle)
+        dist_to_middle_right = dist_between_two_pts(top_right2,top_middle)
+
+        NAME = image_name[0:len(image_name)-3]+'pickle'
+        #pickle.dump(ax, open(NAME, 'w'))
+        data = [NAME, "%.15f" % distance_left, "%.15f" % distance_right, "%.15f" % relative_dist_left, "%.15f" % relative_dist_right, "%.15f" % depth_left, "%.15f" % depth_right, "%.15f" % relative_depth_left, "%.15f" % relative_depth_right, "%.15f" % abs_slope_left, "%.15f" % abs_slope_right, "%.15f" % dist_to_middle_left, "%.15f" % dist_to_middle_right]
+        with open('experiments/experimentData.csv', 'ab') as f:
+            a = csv.writer(f,delimiter=",")
+            a.writerow(data)
+            f.close()
+"""
+"""
+# After creating the data, this script is used to go through each of the test photos and look at the diagram, so I can enter which point to choose manually
+
+import pandas as pd
+df = pd.read_csv('experiments/experimentData.csv')
+for index, row in df.iterrows():
+    ax = pickle.load(open(row['NAME']))
+    plt.show()
+
+"""
+
+"""
+# plot the data
+df = pd.read_csv('experiments/experimentData.csv')
+df.loc[:,'dist_to_middle_left_over_dist_to_middle_right']=df['dist_to_middle_left']/df['dist_to_middle_right']
+df.loc[:,'dist_to_middle_right_over_dist_to_middle_left']=df['dist_to_middle_right']/df['dist_to_middle_left']
+
+f1 = plt.figure()
+ax = f1.add_subplot(111)
+
+left_f = df[df.left_farthest_inter_mid_any_or_neither=='f']
+right_f = df[df.right_farthest_inter_mid_any_or_neither=='f']
+depth_left_f = left_f['depth_left'].values
+distance_left_f = left_f['distance_left'].values
+depth_right_f = right_f['depth_right'].values
+distance_right_f = right_f['distance_right'].values
+abs_slope_left_f = left_f['abs_slope_left'].values
+abs_slope_right_f = right_f['abs_slope_right'].values
+right_over_left_f = right_f['dist_to_middle_right_over_dist_to_middle_left'].values
+left_over_right_f = left_f['dist_to_middle_left_over_dist_to_middle_right'].values
+ratio_f = np.hstack((left_over_right_f,right_over_left_f))
+slope_f = np.hstack((abs_slope_left_f,abs_slope_right_f))
+depth_f = np.hstack((depth_left_f,depth_right_f))
+distance_f = np.hstack((distance_left_f,distance_right_f))
+ax.scatter(distance_f,ratio_f,c='y',label='farthest')
+
+left_m = df[df.left_farthest_inter_mid_any_or_neither=='m']
+right_m = df[df.right_farthest_inter_mid_any_or_neither=='m']
+depth_left_m = left_m['depth_left'].values
+distance_left_m = left_m['distance_left'].values
+depth_right_m = right_m['depth_right'].values
+distance_right_m = right_m['distance_right'].values
+abs_slope_left_m = left_m['abs_slope_left'].values
+abs_slope_right_m = right_m['abs_slope_right'].values
+right_over_left_m = right_m['dist_to_middle_right_over_dist_to_middle_left'].values
+left_over_right_m = left_m['dist_to_middle_left_over_dist_to_middle_right'].values
+ratio_m = np.hstack((left_over_right_m,right_over_left_m))
+slope_m = np.hstack((abs_slope_left_m,abs_slope_right_m))
+depth_m = np.hstack((depth_left_m,depth_right_m))
+distance_m = np.hstack((distance_left_m,distance_right_m))
+ax.scatter(distance_m,ratio_m,c='b',label='midpoint')
+
+left_i = df[df.left_farthest_inter_mid_any_or_neither=='i']
+right_i = df[df.right_farthest_inter_mid_any_or_neither=='i']
+depth_left_i = left_i['depth_left'].values
+distance_left_i = left_i['distance_left'].values
+depth_right_i = right_i['depth_right'].values
+distance_right_i = right_i['distance_right'].values
+abs_slope_left_i = left_i['abs_slope_left'].values
+abs_slope_right_i = right_i['abs_slope_right'].values
+right_over_left_i = right_i['dist_to_middle_right_over_dist_to_middle_left'].values
+left_over_right_i = left_i['dist_to_middle_left_over_dist_to_middle_right'].values
+ratio_i = np.hstack((left_over_right_i,right_over_left_i))
+slope_i = np.hstack((abs_slope_left_i,abs_slope_right_i))
+depth_i = np.hstack((depth_left_i,depth_right_i))
+distance_i = np.hstack((distance_left_i,distance_right_i))
+ax.scatter(distance_i,ratio_i,c='r',label='intersection')
+
+
+left_a = df[df.left_farthest_inter_mid_any_or_neither=='a']
+right_a = df[df.right_farthest_inter_mid_any_or_neither=='a']
+depth_left_a = left_a['depth_left'].values
+distance_left_a = left_a['distance_left'].values
+depth_right_a = right_a['depth_right'].values
+distance_right_a = right_a['distance_right'].values
+abs_slope_left_a = left_a['abs_slope_left'].values
+abs_slope_right_a = right_a['abs_slope_right'].values
+right_over_left_a = right_a['dist_to_middle_right_over_dist_to_middle_left'].values
+left_over_right_a = left_a['dist_to_middle_left_over_dist_to_middle_right'].values
+ratio_a = np.hstack((left_over_right_a,right_over_left_a))
+slope_a = np.hstack((abs_slope_left_a,abs_slope_right_a))
+depth_a = np.hstack((depth_left_a,depth_right_a))
+distance_a = np.hstack((distance_left_a,distance_right_a))
+ax.scatter(distance_a,ratio_a,c='b',label='any')
+
+left_n = df[df.left_farthest_inter_mid_any_or_neither=='n']
+right_n = df[df.right_farthest_inter_mid_any_or_neither=='n']
+depth_left_n = left_n['depth_left'].values
+distance_left_n = left_n['distance_left'].values
+depth_right_n = right_n['depth_right'].values
+distance_right_n = right_n['distance_right'].values
+abs_slope_left_n = left_n['abs_slope_left'].values
+abs_slope_right_n = right_n['abs_slope_right'].values
+right_over_left_n = right_n['dist_to_middle_right_over_dist_to_middle_left'].values
+left_over_right_n = left_n['dist_to_middle_left_over_dist_to_middle_right'].values
+ratio_n = np.hstack((left_over_right_n,right_over_left_n))
+slope_n = np.hstack((abs_slope_left_n,abs_slope_right_n))
+depth_n = np.hstack((depth_left_n,depth_right_n))
+distance_n = np.hstack((distance_left_n,distance_right_n))
+ax.scatter(distance_n,ratio_n,c='k',label='none')
+
+
+plt.xlabel('distance')
+plt.ylabel('ratio')
+
+plt.legend()
 plt.show()
+"""
 
-#
+# Create a classifer using sklearn's One-vs-Rest Logistic Regression
+# data is in CSV with the following columns:
+# NAME, distance_left, distance_right, relative_dist_left, relative_dist_right, depth_left, depth_right, relative_depth_left, relative_depth_right, abs_slope_left, abs_slope_right, dist_to_middle_left, dist_to_middle_right, left_farthest_inter_mid_any_or_neither, right_farthest_inter_mid_any_or_neither
+from sklearn.linear_model import LogisticRegression
+df = pd.read_csv('experiments/experimentData.csv')
+df.loc[:,'dist_to_middle_left_over_dist_to_middle_right']=df['dist_to_middle_left']/df['dist_to_middle_right']
+df.loc[:,'dist_to_middle_right_over_dist_to_middle_left']=df['dist_to_middle_right']/df['dist_to_middle_left']
+# remove crazy outliers
+
+# Classifier will be the same for left and right points, so engineer numpy arrays so that left is simply
+# on top of right 
+
+depth_left      = df['depth_left'].values
+depth_right     = df['depth_right'].values
+num_rows = depth_left.shape[0]+depth_right.shape[0]
+depth = np.transpose(np.hstack((depth_left,depth_right))).reshape(num_rows,1)
+
+distance_left   = df['distance_left'].values
+distance_right  = df['distance_right'].values
+distance = np.transpose(np.hstack((distance_left,distance_right))).reshape(num_rows,1)
+
+abs_slope_left  = df['abs_slope_left'].values
+abs_slope_right = df['abs_slope_right'].values
+abs_slope = np.transpose(np.hstack((abs_slope_left,abs_slope_right))).reshape(num_rows,1)
+
+left_over_right = df['dist_to_middle_left_over_dist_to_middle_right'].values
+right_over_left = df['dist_to_middle_right_over_dist_to_middle_left'].values
+ratio_to_center = np.transpose(np.hstack((left_over_right,right_over_left))).reshape(num_rows,1)
+
+classification_left = df['left_farthest_inter_mid_any_or_neither']
+classification_right = df['right_farthest_inter_mid_any_or_neither']
+classification_letters = np.transpose(np.hstack((classification_left,classification_right))).reshape(num_rows,1)
+
+Xy = np.concatenate((depth,distance,abs_slope,ratio_to_center,classification_letters),axis=1)
+
+# turn back into DataFrame to do logical masking and clean data of outliers
+df2 = pd.DataFrame(Xy, columns = ['depth','distance','abs_slope','ratio_to_center','classification_letters'])
+df2=df2[df2.depth<=np.mean(df2['depth'].values)+np.std(df2['depth'].values)]
+df2=df2[df2.distance<=np.mean(df2['distance'].values)+2*np.std(df2['distance'].values)]
+df2=df2[df2.abs_slope<=np.mean(df2['abs_slope'].values)+np.std(df2['abs_slope'].values)]
+df2=df2[df2.classification_letters != 'n']
+df2['depth_squared'] = df2['depth']**2. 
+df2['distance_squared'] = df2['distance']**2.
+df2['abs_slope_squared'] = df2['abs_slope']**2.
+df2['depth_cubed'] = df2['depth']**3.
+df2['distance_cubed'] = df2['distance']**3.
+df2['abs_slope_cubed'] = df2['abs_slope']**3.
+df2['depth_sqrt'] = df2['depth']**0.5
+df2['distance_sqrt'] = df2['distance']**0.5
+df2['abs_slope_sqrt'] = df2['abs_slope']**0.5
+df2['depth_distance'] = df2['depth']*df2['distance']
+df2['depth_abs_slope'] = df2['depth']*df2['abs_slope']
+df2['distance_abs_slope'] = df2['distance']*df2['abs_slope']
+
+
+
+
+X = df2.values[:,[0,1,2,5,6,7,8,9,10,11,12,13,14,15,16]] # dropped the none, so decided not to use ratio_to_center
+classification_letters = df2.values[:,4]
+
+
+# classification will be held in variable y and map as follows
+# farthest_distance_below_top_line       ('f') - 0
+# find_top_line_intersection_points      ('i') - 1
+# project_from_midpoint_of_2_predictions ('m') - 2
+# any                                    ('a') - 2
+y = np.zeros((classification_letters.shape[0],))
+for i in xrange(classification_letters.shape[0]):
+    letter = classification_letters[i]
+    if letter=='f':
+        y[i]=0
+    if letter=='i':
+        y[i]=1
+    if letter=='m':
+        y[i]=2
+    if letter=='a':
+        y[i]=2
+
+# train the classifer
+multi_class='multinomial'
+clf = LogisticRegression(solver='newton-cg', max_iter=10000, random_state=42, multi_class=multi_class).fit(X, y)
+print("training score : %.3f (%s)" % (clf.score(X, y), multi_class)) # ~80.2%
+
+# pickle the classifier
+with open('which_top_point_classifier.pickle','wb') as f:
+    pickle.dump(clf,f)
+
+
 
 #!!! This is the full program, just used as a testing file
-# In predict, make another function that takes in the edgeX, edgeY predictions
-
-# make a script that goes through each photo in the representative sample you have chosen, and for each sample adds to a CSV
-# file: image_name, distance from farthest from top line to top line, distance along top line from intersection to farthest from (left, then right for these last 2 columns), save photo of both predictions for each photo under similar name.
-# use all of this data to find a cutoff for distance from top line and/or distance from intersection to farthest (as a backup) to determine which hueristic to use for each photo.
+# modify original program so it has all the engineered features,
+# make predictions and take the TWO most likely predictions on either side and
+# save 4 pictures with all the combinations
