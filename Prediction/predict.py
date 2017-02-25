@@ -71,12 +71,50 @@ class EarlyStopping(object):
             nn.load_params_from(self.best_weights)
             raise StopIteration()
 
+class CoordinateStore:
+    def __init__(self):
+        self.X = None
+        self.Y = None
+
+    def select_point(self,event,x,y,flags,param):
+            if event == cv2.EVENT_LBUTTONDOWN:
+                cv2.circle(img,(x,y),5,(0,0,255),-1)
+                self.X = x
+                self.Y = y
+
 # FUNCTIONS
 
 # Label all the photos in the ToBeLabeled directory. Each photo should begin with the photo number (i.e. 90_5x.jpg)
 # and have a corresponding XML file (i.e. 90_5x.jpg_meta.xml)
 # The photos will be given a folder name (based on their number) that contains the original photo, xml file, and labeled photo
 def auto_label(mod,which_top_point_classifier):
+    for file in os.listdir('ToBeLabeled/SelfBottom/'):
+        name, ext = os.path.splitext(file)
+        if not(ext=='.jpg' or ext=='.png' or ext=='.bmp') :
+            continue
+        number = get_number_from_name(name)
+        target_dir = os.path.join('Labeled/', number)
+        if not(os.path.isdir(target_dir)):
+            os.mkdir(target_dir)
+        XML_file_name = 'ToBeLabeled/SelfBottom/' + file + '_meta.xml'
+        scaling_factor = find_scaling_factor_from_XML(XML_file_name)
+        image_name = 'ToBeLabeled/SelfBottom/' + name + ext
+        print "current image = ", image_name
+        fig1, ax1, fig2, ax2, fig3, ax3, fig4, ax4 = label(mod, which_top_point_classifier, image_name,units_per_pixel=scaling_factor, show=False,self_bottom=True)
+        for i in xrange(4):
+            fileName = os.path.join(target_dir,name+'_labeled'+str(i)+'.png')
+            if i==0:
+                fig1.savefig(fileName,transparent=True,bboxinches='tight',pad_inches=0)
+            if i==1:
+                fig2.savefig(fileName,transparent=True,bboxinches='tight',pad_inches=0)
+            if i==2:
+                fig3.savefig(fileName,transparent=True,bboxinches='tight',pad_inches=0)
+            if i==3:
+                fig4.savefig(fileName,transparent=True,bboxinches='tight',pad_inches=0)
+        os.rename('ToBeLabeled/SelfBottom/'+file,os.path.join(target_dir,file))
+        os.rename(XML_file_name,os.path.join(target_dir,XML_file_name[23:len(XML_file_name)]))
+        plt.close()
+
     for file in os.listdir('ToBeLabeled/Bottom/'):
         name, ext = os.path.splitext(file)
         if not(ext=='.jpg' or ext=='.png' or ext=='.bmp') :
@@ -162,9 +200,9 @@ def find_scaling_factor_from_XML(file_name):
 # Label the image for width, height, and depth
 # Input the list of models (from load_model()), image name (string) , units (string), and units per pixel (float) and get a labeled image as the output
 # lab_bottom determines whether it will label the bottom of the weld (some welds don't go all the way through)
-def label(models,which_top_point_classifier,image_name,units=r'$\mu m$',units_per_pixel=1,lab_bottom=True,show=False,save_numerical_data=SAVE_NUMERICAL_DATA):
+def label(models,which_top_point_classifier,image_name,units=r'$\mu m$',units_per_pixel=1,lab_bottom=True,show=False,save_numerical_data=SAVE_NUMERICAL_DATA,self_bottom=False):
     # find the predicted points according to the model
-    Xfinal1, Yfinal1, Xfinal2, Yfinal2, Xfinal3, Yfinal3, Xfinal4, Yfinal4, original_width, original_height, top_left_edgepoint, top_right_edgepoint, mleft, bleft, mright, bright = predict(models,which_top_point_classifier,image_name,plot=False)
+    Xfinal1, Yfinal1, Xfinal2, Yfinal2, Xfinal3, Yfinal3, Xfinal4, Yfinal4, original_width, original_height, top_left_edgepoint, top_right_edgepoint, mleft, bleft, mright, bright = predict(models,which_top_point_classifier,image_name,plot=False,self_bottom=self_bottom)
     a = 1 # accumulator
     for x, y in [[Xfinal1,Yfinal1],[Xfinal2,Yfinal2],[Xfinal3,Yfinal3],[Xfinal4,Yfinal4]]:
         # separate points into tuples
@@ -175,7 +213,7 @@ def label(models,which_top_point_classifier,image_name,units=r'$\mu m$',units_pe
         bottom_left = (x[4],y[4])
         bottom_right = (x[5],y[5])
         # find all the boundaries and lengths for labeling
-        left_width_boundary,right_width_boundary,top_height_boundary,bottom_height_boundary,top_depth_boundary,bottom_depth_boundary,width,height,depth,inter,inter2,left_width_boundary_bottom,right_width_boundary_bottom, bottom_width = find_all_boundaries_and_lengths(top_left,top_middle,top_right,bottom_middle,bottom_left,bottom_right,units_per_pixel,top_left_edgepoint,top_right_edgepoint)
+        left_width_boundary,right_width_boundary,top_height_boundary,bottom_height_boundary,top_depth_boundary,bottom_depth_boundary,width,height,depth,inter,inter2,left_width_boundary_bottom,right_width_boundary_bottom, bottom_width = find_all_boundaries_and_lengths(top_left,top_middle,top_right,bottom_middle,bottom_left,bottom_right,units_per_pixel,top_left_edgepoint,top_right_edgepoint,self_bottom=self_bottom)
         if a==1:
             if save_numerical_data:
                 if not(os.path.exists(os.path.join(os.getcwd(),'Labeled/NumericalData','numDataPrediction'+str(a-1)+'.csv'))):
@@ -190,7 +228,7 @@ def label(models,which_top_point_classifier,image_name,units=r'$\mu m$',units_pe
                     c.writerow(data)
                     f.close()
             # plot
-            fig1,ax1 = plot_labels(image_name,top_left,top_middle,top_right,bottom_middle,bottom_left,bottom_right,left_width_boundary,right_width_boundary,top_height_boundary,bottom_height_boundary,top_depth_boundary,bottom_depth_boundary,lab_bottom,width,height,depth,units,units_per_pixel,inter,inter2,original_width,original_height,top_left_edgepoint,top_right_edgepoint,left_width_boundary_bottom,right_width_boundary_bottom,bottom_width)
+            fig1,ax1 = plot_labels(image_name,top_left,top_middle,top_right,bottom_middle,bottom_left,bottom_right,left_width_boundary,right_width_boundary,top_height_boundary,bottom_height_boundary,top_depth_boundary,bottom_depth_boundary,lab_bottom,width,height,depth,units,units_per_pixel,inter,inter2,original_width,original_height,top_left_edgepoint,top_right_edgepoint,left_width_boundary_bottom,right_width_boundary_bottom,bottom_width,self_bottom=self_bottom)
         if a==2:
             if save_numerical_data:
                 if not(os.path.exists(os.path.join(os.getcwd(),'Labeled/NumericalData','numDataPrediction'+str(a-1)+'.csv'))):
@@ -204,7 +242,7 @@ def label(models,which_top_point_classifier,image_name,units=r'$\mu m$',units_pe
                     c = csv.writer(f,delimiter=",")
                     c.writerow(data)
                     f.close()
-            fig2,ax2 = plot_labels(image_name,top_left,top_middle,top_right,bottom_middle,bottom_left,bottom_right,left_width_boundary,right_width_boundary,top_height_boundary,bottom_height_boundary,top_depth_boundary,bottom_depth_boundary,lab_bottom,width,height,depth,units,units_per_pixel,inter,inter2,original_width,original_height,top_left_edgepoint,top_right_edgepoint,left_width_boundary_bottom,right_width_boundary_bottom,bottom_width)
+            fig2,ax2 = plot_labels(image_name,top_left,top_middle,top_right,bottom_middle,bottom_left,bottom_right,left_width_boundary,right_width_boundary,top_height_boundary,bottom_height_boundary,top_depth_boundary,bottom_depth_boundary,lab_bottom,width,height,depth,units,units_per_pixel,inter,inter2,original_width,original_height,top_left_edgepoint,top_right_edgepoint,left_width_boundary_bottom,right_width_boundary_bottom,bottom_width,self_bottom=self_bottom)
         if a==3:
             if save_numerical_data:
                 if not(os.path.exists(os.path.join(os.getcwd(),'Labeled/NumericalData','numDataPrediction'+str(a-1)+'.csv'))):
@@ -218,7 +256,7 @@ def label(models,which_top_point_classifier,image_name,units=r'$\mu m$',units_pe
                     c = csv.writer(f,delimiter=",")
                     c.writerow(data)
                     f.close()
-            fig3,ax3 = plot_labels(image_name,top_left,top_middle,top_right,bottom_middle,bottom_left,bottom_right,left_width_boundary,right_width_boundary,top_height_boundary,bottom_height_boundary,top_depth_boundary,bottom_depth_boundary,lab_bottom,width,height,depth,units,units_per_pixel,inter,inter2,original_width,original_height,top_left_edgepoint,top_right_edgepoint,left_width_boundary_bottom,right_width_boundary_bottom,bottom_width)
+            fig3,ax3 = plot_labels(image_name,top_left,top_middle,top_right,bottom_middle,bottom_left,bottom_right,left_width_boundary,right_width_boundary,top_height_boundary,bottom_height_boundary,top_depth_boundary,bottom_depth_boundary,lab_bottom,width,height,depth,units,units_per_pixel,inter,inter2,original_width,original_height,top_left_edgepoint,top_right_edgepoint,left_width_boundary_bottom,right_width_boundary_bottom,bottom_width,self_bottom=self_bottom)
         if a==4:
             if save_numerical_data:
                 if not(os.path.exists(os.path.join(os.getcwd(),'Labeled/NumericalData','numDataPrediction'+str(a-1)+'.csv'))):
@@ -232,7 +270,7 @@ def label(models,which_top_point_classifier,image_name,units=r'$\mu m$',units_pe
                     c = csv.writer(f,delimiter=",")
                     c.writerow(data)
                     f.close()                                
-            fig4,ax4 = plot_labels(image_name,top_left,top_middle,top_right,bottom_middle,bottom_left,bottom_right,left_width_boundary,right_width_boundary,top_height_boundary,bottom_height_boundary,top_depth_boundary,bottom_depth_boundary,lab_bottom,width,height,depth,units,units_per_pixel,inter,inter2,original_width,original_height,top_left_edgepoint,top_right_edgepoint,left_width_boundary_bottom,right_width_boundary_bottom,bottom_width)
+            fig4,ax4 = plot_labels(image_name,top_left,top_middle,top_right,bottom_middle,bottom_left,bottom_right,left_width_boundary,right_width_boundary,top_height_boundary,bottom_height_boundary,top_depth_boundary,bottom_depth_boundary,lab_bottom,width,height,depth,units,units_per_pixel,inter,inter2,original_width,original_height,top_left_edgepoint,top_right_edgepoint,left_width_boundary_bottom,right_width_boundary_bottom,bottom_width,self_bottom=self_bottom)
         if show: # for testing purposes only
             plt.axis('off')
             plt.show()
@@ -249,7 +287,7 @@ def revise(s):
 
 
 # input image name and models, get out the model's prediction **on the original sized image**
-def predict(models,which_top_point_classifier,image_name,plot=True):
+def predict(models,which_top_point_classifier,image_name,plot=True,self_bottom=False):
     # Process the image for model
     img = cv2.imread(image_name, cv2.IMREAD_GRAYSCALE)
     imgp = convert_to_square(img)
@@ -274,7 +312,26 @@ def predict(models,which_top_point_classifier,image_name,plot=True):
     top_left_edgepoint, top_right_edgepoint, mleft, bleft, mright, bright = find_edge_points(outline,top_outline,edgeX,edgeY)
 
     # revise bottom left and bottom right predictions
-    edgeX, edgeY = revise_bottom_left_and_bottom_right(outline,top_outline,edgeX,edgeY) 
+    edgeX, edgeY = revise_bottom_left_and_bottom_right(outline,top_outline,edgeX,edgeY)
+
+    # if self_bottom is True, select the bottom point manually
+    if self_bottom:
+        cstore = CoordinateStore()
+        img = cv2.imread(image_name)
+        cv2.namedWindow("click bottom point | press 's' to save and continue")
+        cv2.setMouseCallback("click bottom point | press 's' to save and continue", cstore.select_point)
+        while True:
+            # display the image and wait for a keypress
+            cv2.imshow("click bottom point | press 's' to save and continue", img)
+            key = cv2.waitKey(1) & 0xFF # may need to change for 32 bit machines (take out & 0xFF)
+
+            # if the 's' key is pressed, break from the loop
+            if key == ord("s"):
+                break
+        
+        cv2.destroyAllWindows()
+        edgeX[3] = float(cstore.X)
+        edgeY[3] = float(cstore.Y)
 
     # revise top_left and top_right predictions to be more accurate
     Xfinal1, Yfinal1, Xfinal2, Yfinal2, Xfinal3, Yfinal3, Xfinal4, Yfinal4 = revise_top_left_and_top_right(edgeX, edgeY, mleft, bleft, mright, bright, top_outline, which_top_point_classifier)
@@ -286,7 +343,7 @@ def predict(models,which_top_point_classifier,image_name,plot=True):
         plot_sample(outline,edgeX,edgeY)
         plt.show()
 
-    return Xfinal1, Yfinal1, Xfinal2, Yfinal2, Xfinal3, Yfinal3, Xfinal4, Yfinal4, original_width, original_height, top_left_edgepoint, top_right_edgepoint, mleft, bleft, mright, bright 
+    return Xfinal1, Yfinal1, Xfinal2, Yfinal2, Xfinal3, Yfinal3, Xfinal4, Yfinal4, original_width, original_height, top_left_edgepoint, top_right_edgepoint, mleft, bleft, mright, bright
 
 # find the intersection point between the bottom line on either side (left and right)
 # and the bottom of the weld, and call this the outside points
@@ -852,7 +909,7 @@ def line_between_2_pts(pt1,pt2):
     return m, b
 
 # find all the boundaries for labeling
-def find_all_boundaries_and_lengths(top_left,top_middle,top_right,bottom_middle,bottom_left,bottom_right,units_per_pixel,top_left_edgepoint,top_right_edgepoint):
+def find_all_boundaries_and_lengths(top_left,top_middle,top_right,bottom_middle,bottom_left,bottom_right,units_per_pixel,top_left_edgepoint,top_right_edgepoint,self_bottom=False):
     # find the equation of the line connecting top_left and top_right
     m_width, b_width = line_between_2_pts(top_left,top_right)
     # find the equation of the line connecting the edge points
@@ -890,18 +947,32 @@ def find_all_boundaries_and_lengths(top_left,top_middle,top_right,bottom_middle,
     top_height_boundary = intersection(mm,bb,m_height_draw,b_height_draw)
     # find equation of the line connecting bottom left and bottom right
     m_bot, b_bot = line_between_2_pts(bottom_left,bottom_right)
+    # modify for self_bottom = True
+    if self_bottom:
+        m_bot = m_edge
+        b_bot = b_edge
     # find the equation of the line perpendicular to the line connecting bottom left and bottom right
     # and passing through bottom middle
     m_depth, b_depth = perp_line(m_bot,bottom_middle)
     # find the intersection of the bottom line and the depth line
     inter2 = intersection(m_bot,b_bot,m_depth,b_depth)
-    # find the depth (pixel distance between bottom middle and inter * units_per_pixel)
+    # find the depth (pixel distance between bottom middle and inter2 * units_per_pixel)
     depth = dist_between_two_pts(inter2,bottom_middle) * units_per_pixel
     # find the equation of the line with slope m_depth going through bottom_height_boundary
     m_depth_draw = m_depth
     b_depth_draw = bottom_height_boundary[1] - m_depth_draw*bottom_height_boundary[0]
     if m_depth_draw == np.infty:
         b_depth_draw = bottom_height_boundary[0]
+    
+    # if it's lab_bottom, put the bottom label on the opposite side
+    # first find the bottom_height_boundary_left, then go through the process above with that in place
+    if self_bottom:
+        bottom_height_boundary_left = midpoint(midpoint(inter,(top_left[0],m_edge*top_left[0]+b_edge)),(top_left[0],m_edge*top_left[0]+b_edge))
+        m_depth_draw = m_depth
+        b_depth_draw = bottom_height_boundary_left[1] - m_depth_draw*bottom_height_boundary_left[0]
+        if m_depth_draw == np.infty:
+            b_depth_draw = bottom_height_boundary_left[0]
+
     # top depth boundary is intersection of this line and the line connecting bottom left and bottom right (m_bot,b_bot)
     top_depth_boundary = intersection(m_bot,b_bot,m_depth_draw,b_depth_draw)
     # find equation going through bottom_middle with slope m_bot
@@ -915,6 +986,8 @@ def find_all_boundaries_and_lengths(top_left,top_middle,top_right,bottom_middle,
     # of slope m_depth going through bottom_left (then do the same thing for bottom right)
     left_width_boundary_bottom = find_width_bound(m_width_draw_bottom,b_width_draw_bottom,m_depth,bottom_left)
     right_width_boundary_bottom = find_width_bound(m_width_draw_bottom,b_width_draw_bottom,m_depth,bottom_right)
+
+        
 
     return left_width_boundary,right_width_boundary,top_height_boundary,bottom_height_boundary,top_depth_boundary,bottom_depth_boundary,width,height,depth,inter,inter2,left_width_boundary_bottom,right_width_boundary_bottom,bottom_width
 
@@ -1003,7 +1076,7 @@ def midpoint(p1,p2):
     return ((p1[0]+p2[0])/2.,(p1[1]+p2[1])/2.)    
 
 # plot all the labels
-def plot_labels(image_name,top_left,top_middle,top_right,bottom_middle,bottom_left,bottom_right,left_width_boundary,right_width_boundary,top_height_boundary,bottom_height_boundary,top_depth_boundary,bottom_depth_boundary,lab_bottom,width,height,depth,units,units_per_pixel,inter,inter2,original_width,original_height,top_left_edgepoint,top_right_edgepoint,left_width_boundary_bottom,right_width_boundary_bottom,bottom_width):
+def plot_labels(image_name,top_left,top_middle,top_right,bottom_middle,bottom_left,bottom_right,left_width_boundary,right_width_boundary,top_height_boundary,bottom_height_boundary,top_depth_boundary,bottom_depth_boundary,lab_bottom,width,height,depth,units,units_per_pixel,inter,inter2,original_width,original_height,top_left_edgepoint,top_right_edgepoint,left_width_boundary_bottom,right_width_boundary_bottom,bottom_width,self_bottom=False):
     line_color=LABEL_COLOR
     fig = plt.figure()
     ax = plt.Axes(fig,[0., 0., 1., 1.])
@@ -1029,20 +1102,20 @@ def plot_labels(image_name,top_left,top_middle,top_right,bottom_middle,bottom_le
     height_text_point = midpoint(bottom_height_boundary,top_height_boundary)
     if lab_bottom:
         # plot
-        ax.plot(np.array([bottom_left[0],bottom_right[0]]),np.array([bottom_left[1],bottom_right[1]]),color=line_color,linestyle='--')
+        if not(self_bottom):
+            ax.plot(np.array([bottom_left[0],bottom_right[0]]),np.array([bottom_left[1],bottom_right[1]]),color=line_color,linestyle='--')
+            ax.plot(np.array([bottom_left[0],left_width_boundary_bottom[0]]),np.array([bottom_left[1],left_width_boundary_bottom[1]]),color=line_color)
+            ax.plot(np.array([bottom_right[0],right_width_boundary_bottom[0]]),np.array([bottom_right[1],right_width_boundary_bottom[1]]),color=line_color)
+            bottom_width_line, = ax.plot(np.array([left_width_boundary_bottom[0],right_width_boundary_bottom[0]]),np.array([left_width_boundary_bottom[1],right_width_boundary_bottom[1]]),color=line_color)
         ax.plot(np.array([inter2[0],top_depth_boundary[0]]),np.array([inter2[1],top_depth_boundary[1]]),color=line_color)
         ax.plot(np.array([bottom_middle[0],bottom_depth_boundary[0]]),np.array([bottom_middle[1],bottom_depth_boundary[1]]),color=line_color)
         depth_line, = ax.plot(np.array([top_depth_boundary[0],bottom_depth_boundary[0]]),np.array([top_depth_boundary[1],bottom_depth_boundary[1]]),color=line_color)
-        
-        ax.plot(np.array([bottom_left[0],left_width_boundary_bottom[0]]),np.array([bottom_left[1],left_width_boundary_bottom[1]]),color=line_color)
-        ax.plot(np.array([bottom_right[0],right_width_boundary_bottom[0]]),np.array([bottom_right[1],right_width_boundary_bottom[1]]),color=line_color)
-        bottom_width_line, = ax.plot(np.array([left_width_boundary_bottom[0],right_width_boundary_bottom[0]]),np.array([left_width_boundary_bottom[1],right_width_boundary_bottom[1]]),color=line_color)
-
         # label 
         depth_text_point = midpoint(bottom_depth_boundary,top_depth_boundary)
         label_line(depth_line,str('%.2f'%depth)+' '+units,depth_text_point[0],depth_text_point[1],'depth')
-        bottom_width_text_point = midpoint(left_width_boundary_bottom,right_width_boundary_bottom)
-        label_line(bottom_width_line,str('%.2f'%bottom_width)+' '+units,bottom_width_text_point[0],bottom_width_text_point[1],'width')
+        if not(self_bottom):
+            bottom_width_text_point = midpoint(left_width_boundary_bottom,right_width_boundary_bottom)
+            label_line(bottom_width_line,str('%.2f'%bottom_width)+' '+units,bottom_width_text_point[0],bottom_width_text_point[1],'width')
     # Label all text at the end to avoid messing up aspect ratios:
     label_line(width_line,str('%.2f'%width)+' '+units,width_text_point[0],width_text_point[1],'width')
     label_line(height_line,str('%.2f'%height)+' '+units,height_text_point[0],height_text_point[1],'height')
