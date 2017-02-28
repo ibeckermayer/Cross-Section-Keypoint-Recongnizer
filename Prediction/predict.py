@@ -1129,6 +1129,7 @@ def plot_labels(image_name,top_left,top_middle,top_right,bottom_middle,bottom_le
     plt.ylim(original_height,0)
     return fig, ax
 
+# taken from https://gist.github.com/lzkelley/0de9e8bf2a4fe96d2018f1b1bd5a0d3c
 def label_line(line, label, x, y, hor_or_vert, color=LABEL_COLOR, size=LABEL_SIZE):
     """Add a label to a line, at the proper angle.
         
